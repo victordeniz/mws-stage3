@@ -1,4 +1,4 @@
-// Based on Lorenzo Zaccagnini and Elisa Romonia tech webinar
+// Based on Lorenzo Zaccagnini and Elisa Romondia tech webinar
 /**
  * Common database helper functions.
  */
@@ -11,7 +11,7 @@ class DBHelper {
      */
     static get DATABASE_URL() {
         const port = 1337 // Change this to your server port
-        return `http://localhost:${port}/restaurants`;
+        return `http://localhost:${port}/`;
     }
 
     /**
@@ -53,7 +53,7 @@ class DBHelper {
     }
 
     static fetchAndCacheRestaurants() {
-        return fetch(DBHelper.DATABASE_URL)
+        return fetch(DBHelper.DATABASE_URL + "restaurants")
             .then(response => response.json()).then(restaurants => {
                 return this.dbPromise()
                     .then(db => {
@@ -205,6 +205,152 @@ class DBHelper {
                     })
             })
 
+    }
+
+    static getStoredObjectById(table, idx, id) {
+        return this.dbPromise()
+            .then(function(db) {
+                if (!db) return;
+
+                const store = db.transaction(table).objectStore(table);
+                const indexId = store.index(idx);
+                return indexId.getAll(id);
+            });
+    }
+
+    static fetchReviewsByRestId(id) {
+        return fetch(`${DBHelper.DATABASE_URL}reviews/?restaurant_id=${id}`)
+            .then(response => response.json())
+            .then(reviews => {
+                this.dbPromise()
+                    .then(db => {
+                        if (!db) return;
+
+                        let tx = db.transaction("reviews", "readwrite");
+                        const store = tx.objectStore("reviews");
+                        if (Array.isArray(reviews)) {
+                            reviews.forEach(function(review) {
+                                store.put(review);
+                            });
+                        } else {
+                            store.put(reviews);
+                        }
+                    });
+                return Promise.resolve(reviews);
+            })
+            .catch(error => {
+                return DBHelper.getStoredObjectById("reviews", "restaurant", id)
+                    .then((storedReviews) => {
+                        return Promise.resolve(storedReviews);
+                    })
+            });
+    }
+
+    static addReview(review) {
+        let offline_obj = {
+            name: "addReview",
+            data: review,
+            object_type: "review"
+        };
+        // Check if online
+        if (!navigator.onLine && (offline_obj.name === "addReview")) {
+            DBHelper.sendDataWhenOnline(offline_obj);
+            return;
+        }
+        let reviewSend = {
+            "name": review.name,
+            "rating": parseInt(review.rating),
+            "comments": review.comments,
+            "restaurant_id": parseInt(review.restaurant_id)
+        };
+        var fetch_options = {
+            method: "POST",
+            body: JSON.stringify(reviewSend)/*,
+            headers: new Headers({
+                "Content-Type": "application/json"
+            })*/
+        };
+        fetch(`${DBHelper. DATABASE_URL}reviews/`, {
+            method: "POST",
+            body: JSON.stringify(reviewSend)
+        })/*
+        fetch("http://localhost:1337/reviews", fetch_options)*/.then((response) => {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                return response.json();
+            } else { return "API call successfull"}})
+            .then((data) => {console.log("Fetch successful!")})
+            .catch(error => console.log("error:", error));
+    }
+
+
+
+    static sendDataWhenOnline(offline_obj) {
+        localStorage.setItem("data", JSON.stringify(offline_obj.data));
+        window.addEventListener("online", (event) => {
+            let data = JSON.parse(localStorage.getItem("data"));
+            [...document.querySelectorAll(".reviews_offline")]
+                .forEach(el => {
+                    el.classList.remove("reviews_offline")
+                    el.querySelector(".offline_label").remove()
+                });
+            if (data !== null) {
+                if (offline_obj.name === "addReview") {
+                    DBHelper.addReview(offline_obj.data);
+                }
+
+
+                localStorage.removeItem("data");
+            }
+        });
+    }
+
+    static fetchReviews(id) {
+        return this.dbPromise()
+            .then(db => {
+                const tx = db.transaction("reviews");
+                const reviewStore = tx.objectStore("reviews");
+                console.log("all are: ", reviewStore.getAll());
+                return reviewStore.getAll();
+            })
+            .then(reviews => {
+                if (reviews.length !== 0) {
+                    console.log("before resolve: ", reviews);
+                    return Promise.resolve(reviews);
+                }
+                return this.fetchAndCacheReviews(id);
+            })
+
+    }
+
+    static fetchAndCacheReviews(id) {
+        return fetch(`${DBHelper.DATABASE_URL}reviews/?restaurant_id=${id}`)
+            .then(response => response.json())
+            .then(reviews => {
+                return this.dbPromise()
+                    .then(db => {
+                        const tx = db.transaction("reviews", "readwrite");
+                        const restaurantStore = tx.objectStore("reviews");
+                        reviews.forEach(review => restaurantStore.put(review));
+
+                        return tx.complete.then(() => Promise.resolve(reviews));
+                    });
+            });
+    }
+
+    static fetchReviewsByRestaurantId(id) {
+        return this.fetchReviews(id).then(reviews => {
+            return this.dbPromise().then(db => {
+                const tx = db.transaction("reviews");
+                const reviewsStore = tx.objectStore("reviews");
+                const restaurantIndex = reviewsStore.index("restaurant");
+                return restaurantIndex.getAll(id);
+            }).then(restaurantReviews => {
+                const filtered = reviews.filter(review => review.restaurant_id === id);
+                return filtered;
+
+            })
+        })
     }
 }
 

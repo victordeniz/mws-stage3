@@ -83,7 +83,8 @@ const fillRestaurantHTML = (restaurant = self.restaurant) => {
         fillRestaurantHoursHTML();
     }
     // fill reviews
-    fillReviewsHTML();
+    DBHelper.fetchReviewsByRestId(restaurant.id)
+        .then(reviews => fillReviewsHTML(reviews))
 }
 
 /**
@@ -110,19 +111,21 @@ const fillRestaurantHoursHTML = (operatingHours = self.restaurant.operating_hour
  * Create all reviews HTML and add them to the webpage.
  */
 const fillReviewsHTML = (reviews = self.restaurant.reviews) => {
-    const container = document.getElementById("reviews-container");
-    const title = document.createElement("h2");
-    title.innerHTML = "Reviews";
+    console.log('Reviews:', reviews);
+    const container = document.getElementById('reviews-container');
+    const title = document.createElement('h2');
+    title.innerHTML = 'Reviews';
     container.appendChild(title);
 
     if (!reviews) {
-        const noReviews = document.createElement("p");
-        noReviews.innerHTML = "No reviews yet!";
+        const noReviews = document.createElement('p');
+        noReviews.id = 'no-review';
+        noReviews.innerHTML = 'No reviews yet!';
         container.appendChild(noReviews);
         return;
     }
-    const ul = document.getElementById("reviews-list");
-    reviews.forEach(review => {
+    const ul = document.getElementById('reviews-list');
+    reviews.reverse().forEach(review => {
         ul.appendChild(createReviewHTML(review));
     });
     container.appendChild(ul);
@@ -131,14 +134,21 @@ const fillReviewsHTML = (reviews = self.restaurant.reviews) => {
 /**
  * Create review HTML and add it to the webpage.
  */
-const createReviewHTML = review => {
+const createReviewHTML = (review) => {
     const li = document.createElement("li");
+    if (!navigator.onLine) {
+        const connection_status = document.createElement("p");
+        connection_status.classList.add("offline_label")
+        connection_status.innerHTML = "Offline"
+        li.classList.add("reviews_offline")
+        li.appendChild(connection_status);
+    }
     const name = document.createElement("p");
-    name.innerHTML = review.name;
+    name.innerHTML = `Name: ${review.name}`;
     li.appendChild(name);
 
     const date = document.createElement("p");
-    date.innerHTML = review.date;
+    date.innerHTML = `Date: ${new Date(review.createdAt).toLocaleString()}`;
     li.appendChild(date);
 
     const rating = document.createElement("p");
@@ -148,9 +158,8 @@ const createReviewHTML = review => {
     const comments = document.createElement("p");
     comments.innerHTML = review.comments;
     li.appendChild(comments);
-
     return li;
-};
+}
 
 /**
  * Add restaurant name to the breadcrumb navigation menu
@@ -175,3 +184,39 @@ const getParameterByName = (name, url) => {
     return decodeURIComponent(results[2].replace(/\+/g, " "));
 };
 
+// Form validation & submission
+const addReview = () => {
+    event.preventDefault();
+    // Getting the data from the form
+    let restaurantId = getParameterByName("id");
+    let name = document.getElementById("review-author").value;
+    let rating;
+    let comments = document.getElementById("review-comments").value;
+    rating = document.querySelector("#rating_select option:checked").value;
+    const review = [name, rating, comments, restaurantId];
+
+    // Add data to DOM
+    const frontEndReview = {
+        restaurant_id: parseInt(review[3]),
+        rating: parseInt(review[1]),
+        name: review[0],
+        comments: review[2].substring(0, 300),
+        createdAt: new Date()
+    };
+    // Send review to backend
+    DBHelper.addReview(frontEndReview);
+    addReviewHTML(frontEndReview);
+    document.getElementById("review-form").reset();
+}
+
+const addReviewHTML = (review) => {
+    if (document.getElementById("no-review")) {
+        document.getElementById("no-review").remove();
+    }
+    const container = document.getElementById("reviews-container");
+    const ul = document.getElementById("reviews-list");
+
+    //insert the new review on top
+    ul.insertBefore(createReviewHTML(review), ul.firstChild);
+    container.appendChild(ul);
+}
