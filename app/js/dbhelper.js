@@ -304,54 +304,6 @@ class DBHelper {
             }
         });
     }
-
-    static fetchReviews(id) {
-        return this.dbPromise()
-            .then(db => {
-                const tx = db.transaction("reviews");
-                const reviewStore = tx.objectStore("reviews");
-                console.log("all are: ", reviewStore.getAll());
-                return reviewStore.getAll();
-            })
-            .then(reviews => {
-                if (reviews.length !== 0) {
-                    console.log("before resolve: ", reviews);
-                    return Promise.resolve(reviews);
-                }
-                return this.fetchAndCacheReviews(id);
-            })
-
-    }
-
-    static fetchAndCacheReviews(id) {
-        return fetch(`${DBHelper.DATABASE_URL}reviews/?restaurant_id=${id}`)
-            .then(response => response.json())
-            .then(reviews => {
-                return this.dbPromise()
-                    .then(db => {
-                        const tx = db.transaction("reviews", "readwrite");
-                        const restaurantStore = tx.objectStore("reviews");
-                        reviews.forEach(review => restaurantStore.put(review));
-
-                        return tx.complete.then(() => Promise.resolve(reviews));
-                    });
-            });
-    }
-
-    static fetchReviewsByRestaurantId(id) {
-        return this.fetchReviews(id).then(reviews => {
-            return this.dbPromise().then(db => {
-                const tx = db.transaction("reviews");
-                const reviewsStore = tx.objectStore("reviews");
-                const restaurantIndex = reviewsStore.index("restaurant");
-                return restaurantIndex.getAll(id);
-            }).then(restaurantReviews => {
-                const filtered = reviews.filter(review => review.restaurant_id === id);
-                return filtered;
-
-            })
-        })
-    }
 }
 
 window.DBHelper = DBHelper;

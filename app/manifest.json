@@ -1,6 +1,6 @@
 {
   "name": "Local Restaurants",
-  "short_name": "localrestaurants",
+  "short_name": "localrest",
   "theme_color": "#2196f3",
   "background_color": "#2196f3",
   "display": "standalone",

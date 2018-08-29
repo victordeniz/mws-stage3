@@ -224,7 +224,7 @@ gulp.task("wiredep", () => {
 
 gulp.task(
     "build",
-    ["lint", "html", "images", "icons", "extras"],
+    ["html", "images", "icons", "extras"],
     () => {
         return gulp.src("dist/**/*").pipe($.size({title: "build", gzip: true}));
     }
